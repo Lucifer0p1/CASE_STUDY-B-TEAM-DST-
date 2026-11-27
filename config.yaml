@@ -1,0 +1,101 @@
+# =====================================================================
+# Festival Rush in Bengaluru - project settings
+# Edit the values below. The Python code reads everything from here.
+# =====================================================================
+
+city: Bengaluru            # only stations with this City in stations.csv are kept
+output_dir: outputs        # charts (PNG) and summary.md are saved here
+
+# ---------------------------------------------------------------------
+# 1. CPCB hourly air quality data (Kaggle "Air Quality Data in India 2015-2020")
+# ---------------------------------------------------------------------
+data:
+  cpcb_dataset_link: "<PASTE LINK>"        # Kaggle dataset page
+  cpcb_original_source: "<PASTE LINK>"     # CPCB CCR portal
+  station_hour_csv: data/station_hour.csv  # local path to the big hourly file
+  stations_csv: data/stations.csv          # local path to the station list
+  festival_calendar_csv: data/festival_calendar.csv
+
+# Pollutant columns that get cleaned
+pollutants: [PM2.5, PM10, NO, NO2, NOx, NH3, CO, SO2, O3, Benzene, Toluene, Xylene]
+
+# ---------------------------------------------------------------------
+# 2. Cleaning rules
+# ---------------------------------------------------------------------
+cleaning:
+  error_codes: [999.99, 499.99]   # sensor error codes -> missing
+  co_zero_is_missing: true        # CO == 0 -> missing
+  flatline_hours: 6               # same value for this many hours or more -> missing
+  max_interpolate_gap_hours: 3    # gaps this short (or shorter) are filled linearly
+
+# ---------------------------------------------------------------------
+# 3. What counts as a "normal day"
+# ---------------------------------------------------------------------
+normal_day:
+  # Days around these festivals are NOT normal
+  festivals_with_window: [Diwali, Dasara, Ganesh Chaturthi]
+  days_before: 21
+  days_after: 14
+  # Every other date in the festival calendar (fixed holidays, Balipadyami,
+  # COVID lockdown days) is also excluded, just that single date.
+
+# ---------------------------------------------------------------------
+# 4. Analysis settings
+# ---------------------------------------------------------------------
+analysis:
+  station_chart_start: "2018-07-01"   # chart 2 uses data from this date onward
+  min_hours_per_day: 18               # a station-day needs this many hourly NO2 values
+  baseline_window_days: 70            # chart 5: festival-free days within +/- this many days
+  festival_periods:                   # chart 5: offsets in days from the festival date
+    - label: "Dasara (5 days before)"
+      festival: Dasara
+      start_offset: -5
+      end_offset: -1
+    - label: "Ganesh (week after)"
+      festival: Ganesh Chaturthi
+      start_offset: 1
+      end_offset: 7
+    - label: "Diwali (5 days before)"
+      festival: Diwali
+      start_offset: -5
+      end_offset: -1
+  diwali_early_hours: [20, 21]        # 8-10 PM
+  diwali_late_hours: [22, 23]         # 10 PM-midnight
+
+# ---------------------------------------------------------------------
+# 5. Google Form survey
+# ---------------------------------------------------------------------
+survey:
+  survey_form_link: "<PASTE FORM LINK>"
+  # Local file OR a Google Sheets CSV link:
+  # https://docs.google.com/spreadsheets/d/<ID>/export?format=csv
+  survey_responses_csv: data/survey_responses.csv
+  # Columns are found by matching ALL words of any phrase in the header (case-insensitive)
+  column_keywords:
+    evening_harder: ["harder", "difficult"]
+    worst_time: ["worst time", "worst"]
+    one_fix: ["one thing", "fix"]
+  # The 7 rating questions are found by their answers (they contain these levels)
+  rating_high_levels: ["A lot", "Severely"]
+  max_categories_shown: 10            # long answer lists are cut to the top N
+
+# ---------------------------------------------------------------------
+# 6. External figures from news sources
+# ---------------------------------------------------------------------
+external:
+  tomtom:
+    source_name: "TomTom Traffic Index 2025"
+    source_link: "<PASTE LINK>"
+    average_min: 36.15
+    morning_rush_min: 41.1
+    evening_rush_min: 45.45
+  iblur:
+    source_name: "Bengaluru Traffic Police, Iblur junction study"
+    source_link: "<PASTE LINK>"
+    roads:
+      - name: Sarjapur Road
+        design_pcu: 2400
+        peak_pcu: 8586
+      - name: Iblur-Bellandur
+        design_pcu: 4800
+        peak_pcu: 10657

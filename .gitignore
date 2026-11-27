@@ -1,0 +1,13 @@
+# Large / downloaded data files (CPCB Kaggle CSVs, survey responses)
+data/*.csv
+!data/festival_calendar.csv
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+.ipynb_checkpoints/
