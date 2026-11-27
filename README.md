@@ -104,3 +104,9 @@ COVID lockdown (2020-03-25 to 2020-05-31).
 - **Thin data before 2018.** Only a few Bengaluru stations reported before 2018, so earlier years (and early festival comparisons) rest on fewer stations.
 - **The survey is small.** It is a convenience sample from one Google Form, so the percentages describe respondents, not all of Bengaluru.
 - The TomTom and traffic police figures are copied from news sources and are not recomputed here.
+
+## Use of AI
+
+We used an AI coding assistant (Claude) to help write and tidy up the Python code in this project.
+The analysis questions, the festival calendar, the survey and the interpretation of the results are our own,
+and we checked the code and its outputs ourselves.
