@@ -47,4 +47,8 @@ def load_survey(cfg):
     if not source.startswith("http") and not os.path.exists(source):
         print(f"No survey file at {source}, skipping survey charts")
         return None
-    return pd.read_csv(source)
+    try:
+        return pd.read_csv(source)
+    except Exception as error:
+        print(f"Could not read survey ({error}), skipping survey charts")
+        return None

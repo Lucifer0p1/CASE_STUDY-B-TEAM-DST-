@@ -1,51 +1,31 @@
-# =====================================================================
-# Festival Rush in Bengaluru - project settings
-# Edit the values below. The Python code reads everything from here.
-# =====================================================================
+city: Bengaluru
+output_dir: outputs
 
-city: Bengaluru            # only stations with this City in stations.csv are kept
-output_dir: outputs        # charts (PNG) and summary.md are saved here
-
-# ---------------------------------------------------------------------
-# 1. CPCB hourly air quality data (Kaggle "Air Quality Data in India 2015-2020")
-# ---------------------------------------------------------------------
 data:
-  cpcb_dataset_link: "<PASTE LINK>"        # Kaggle dataset page
-  cpcb_original_source: "<PASTE LINK>"     # CPCB CCR portal
-  station_hour_csv: data/station_hour.csv  # local path to the big hourly file
-  stations_csv: data/stations.csv          # local path to the station list
+  kaggle_dataset_page: https://www.kaggle.com/datasets/rohanrao/air-quality-data-in-india
+  cpcb_dataset_link: https://www.kaggle.com/datasets/rohanrao/air-quality-data-in-india
+  cpcb_original_source: https://airquality.cpcb.gov.in/ccr/
+  station_hour_csv: data/station_hour.csv
+  stations_csv: data/stations.csv
   festival_calendar_csv: data/festival_calendar.csv
 
-# Pollutant columns that get cleaned
 pollutants: [PM2.5, PM10, NO, NO2, NOx, NH3, CO, SO2, O3, Benzene, Toluene, Xylene]
 
-# ---------------------------------------------------------------------
-# 2. Cleaning rules
-# ---------------------------------------------------------------------
 cleaning:
-  error_codes: [999.99, 499.99]   # sensor error codes -> missing
-  flatline_hours: 6               # same value for this many hours or more -> missing
-  max_interpolate_gap_hours: 3    # gaps this short (or shorter) are filled linearly
+  error_codes: [999.99, 499.99]
+  flatline_hours: 6
+  max_interpolate_gap_hours: 3
 
-# ---------------------------------------------------------------------
-# 3. What counts as a "normal day"
-# ---------------------------------------------------------------------
 normal_day:
-  # Days around these festivals are NOT normal
   festivals_with_window: [Diwali, Dasara, Ganesh Chaturthi]
   days_before: 21
   days_after: 14
-  # Every other date in the festival calendar (fixed holidays, Balipadyami,
-  # COVID lockdown days) is also excluded, just that single date.
 
-# ---------------------------------------------------------------------
-# 4. Analysis settings
-# ---------------------------------------------------------------------
 analysis:
-  station_chart_start: "2018-07-01"   # chart 2 uses data from this date onward
-  min_hours_per_day: 18               # a station-day needs this many hourly NO2 values
-  baseline_window_days: 70            # chart 5: festival-free days within +/- this many days
-  festival_periods:                   # chart 5: offsets in days from the festival date
+  station_chart_start: "2018-07-01"
+  min_hours_per_day: 18
+  baseline_window_days: 70
+  festival_periods:
     - label: "Dasara (5 days before)"
       festival: Dasara
       start_offset: -5
@@ -58,39 +38,40 @@ analysis:
       festival: Diwali
       start_offset: -5
       end_offset: -1
-  diwali_early_hours: [20, 21]        # 8-10 PM
-  diwali_late_hours: [22, 23]         # 10 PM-midnight
+  diwali_early_hours: [20, 21]
+  diwali_late_hours: [22, 23]
 
-# ---------------------------------------------------------------------
-# 5. Google Form survey
-# ---------------------------------------------------------------------
 survey:
-  survey_form_link: "<PASTE FORM LINK>"
-  # Local file OR a Google Sheets CSV link:
-  # https://docs.google.com/spreadsheets/d/<ID>/export?format=csv
-  survey_responses_csv: data/survey_responses.csv
-  # Columns are found by matching ALL words of any phrase in the header (case-insensitive)
+  survey_form_link: https://docs.google.com/forms/d/e/1FAIpQLScbg78EQ6XAj2tEmOb1jmZnpGqzfPW5GkGIaIV8pCZJBKTYvw/viewform
+  survey_responses_sheet: https://docs.google.com/spreadsheets/d/1JQhw3YinAIUP3Z6FntmVpdnCmEH0M57-kJiWfMexPaI/edit?usp=sharing
+  survey_responses_csv: https://docs.google.com/spreadsheets/d/1JQhw3YinAIUP3Z6FntmVpdnCmEH0M57-kJiWfMexPaI/export?format=csv
   column_keywords:
     evening_harder: ["harder", "difficult"]
     worst_time: ["worst time", "worst"]
     one_fix: ["one thing", "fix"]
-  # The 7 rating questions are found by their answers (they contain these levels)
   rating_high_levels: ["A lot", "Severely"]
-  max_categories_shown: 10            # long answer lists are cut to the top N
+  max_categories_shown: 10
 
-# ---------------------------------------------------------------------
-# 6. External figures from news sources
-# ---------------------------------------------------------------------
+external_sources:
+  tomtom_traffic_index: https://www.tomtom.com/traffic-index/bengaluru-traffic
+  btp_iblur_capacity_study: https://www.deccanherald.com/india/karnataka/bengaluru/study-by-bengaluru-traffic-police-reveals-vehicle-movement-exceeds-road-capacity-on-orr-sarjapur-road-3774552
+  adaptive_signals_33pct: https://www.deccanherald.com/india/karnataka/bengaluru/ai-powered-signals-in-bengaluru-reduce-travel-time-by-33-3226394
+  adaptive_signals_20pct_75_junctions: https://magzter.com/stories/newspaper/The-New-Indian-Express-Bengaluru/TRAFFIC-DOWN-BY-20-AT-75-KEY-JUNCTIONS-ARE-AI-SIGNALS-HELPING
+  metro_record_ridership: https://www.deccanherald.com/india/karnataka/bengaluru/rcb-celebrations-push-metro-ridership-to-highest-ever-3575348
+  metro_average_ridership: https://www.deccanherald.com/amp/story/india%2Fkarnataka%2Fbengaluru%2Fnamma-metros-average-ridership-falls-marginally-in-may-3597961
+  metro_5min_frequency: https://www.deccanherald.com/india/karnataka/bengaluru/bengaluru-metro-5-min-frequency-for-itpl-mysuru-road-from-356-pm-to-8-pm-3447381
+  metro_new_years_eve: https://theprint.in/india/bmrcl-extends-metro-services-on-new-years-eve/2814444/
+
 external:
   tomtom:
     source_name: "TomTom Traffic Index 2025"
-    source_link: "<PASTE LINK>"
+    source_link: https://www.tomtom.com/traffic-index/bengaluru-traffic
     average_min: 36.15
     morning_rush_min: 41.1
     evening_rush_min: 45.45
   iblur:
     source_name: "Bengaluru Traffic Police, Iblur junction study"
-    source_link: "<PASTE LINK>"
+    source_link: https://www.deccanherald.com/india/karnataka/bengaluru/study-by-bengaluru-traffic-police-reveals-vehicle-movement-exceeds-road-capacity-on-orr-sarjapur-road-3774552
     roads:
       - name: Sarjapur Road
         design_pcu: 2400

@@ -6,10 +6,24 @@ It also adds traffic figures from news sources and charts the results of a small
 
 ## Data links
 
-- CPCB dataset (Kaggle): <PASTE LINK>
-- Original source (CPCB CCR): <PASTE LINK>
-- My Google Form survey: <PASTE FORM LINK>
-- Survey responses sheet: <PASTE SHEET LINK>
+- CPCB dataset (Kaggle): https://www.kaggle.com/datasets/rohanrao/air-quality-data-in-india (download `station_hour.csv` and `stations.csv`)
+- Original source (CPCB CCR): https://airquality.cpcb.gov.in/ccr/
+- My Google Form survey: https://docs.google.com/forms/d/e/1FAIpQLScbg78EQ6XAj2tEmOb1jmZnpGqzfPW5GkGIaIV8pCZJBKTYvw/viewform
+- Survey responses sheet: https://docs.google.com/spreadsheets/d/1JQhw3YinAIUP3Z6FntmVpdnCmEH0M57-kJiWfMexPaI/edit?usp=sharing
+- Survey responses as CSV (read by the code): https://docs.google.com/spreadsheets/d/1JQhw3YinAIUP3Z6FntmVpdnCmEH0M57-kJiWfMexPaI/export?format=csv
+
+### External sources (figures used in charts and recommendations)
+
+| Figure | Source |
+|---|---|
+| TomTom Traffic Index, time to drive 10 km | https://www.tomtom.com/traffic-index/bengaluru-traffic |
+| Bengaluru Traffic Police Iblur capacity study | https://www.deccanherald.com/india/karnataka/bengaluru/study-by-bengaluru-traffic-police-reveals-vehicle-movement-exceeds-road-capacity-on-orr-sarjapur-road-3774552 |
+| AI signals cut travel time by 33% | https://www.deccanherald.com/india/karnataka/bengaluru/ai-powered-signals-in-bengaluru-reduce-travel-time-by-33-3226394 |
+| Traffic down 20% at 75 AI-signal junctions | https://magzter.com/stories/newspaper/The-New-Indian-Express-Bengaluru/TRAFFIC-DOWN-BY-20-AT-75-KEY-JUNCTIONS-ARE-AI-SIGNALS-HELPING |
+| Metro record ridership | https://www.deccanherald.com/india/karnataka/bengaluru/rcb-celebrations-push-metro-ridership-to-highest-ever-3575348 |
+| Metro average ridership | https://www.deccanherald.com/amp/story/india%2Fkarnataka%2Fbengaluru%2Fnamma-metros-average-ridership-falls-marginally-in-may-3597961 |
+| Metro 5-minute evening frequency | https://www.deccanherald.com/india/karnataka/bengaluru/bengaluru-metro-5-min-frequency-for-itpl-mysuru-road-from-356-pm-to-8-pm-3447381 |
+| Metro extended on New Year's Eve | https://theprint.in/india/bmrcl-extends-metro-services-on-new-years-eve/2814444/ |
 
 ## Setup
 
@@ -27,17 +41,14 @@ It also adds traffic figures from news sources and charts the results of a small
    data/festival_calendar.csv   (already included)
    ```
 
-3. Survey responses: either export the Google Form responses to `data/survey_responses.csv`,
-   or put a Google Sheets CSV link in `config.yaml`:
-   `https://docs.google.com/spreadsheets/d/<ID>/export?format=csv`
-   (the sheet must be shared as "Anyone with the link can view").
-   If no survey file is found, the survey charts are skipped and everything else still runs.
+3. Survey responses are read straight from the Google Sheet (CSV link in `config.yaml`).
+   The sheet must be shared as "Anyone with the link can view". To use a local file instead,
+   export the responses to `data/survey_responses.csv` and set `survey_responses_csv` to that path.
+   If the survey can't be read, the survey charts are skipped and everything else still runs.
 
-4. Edit `config.yaml`:
-   - paste the dataset, form and news-source links in place of the `<PASTE ...>` placeholders
-   - change file paths if your files live somewhere else
-   - optional: tweak the cleaning rules, the "normal day" window, or the survey column keywords
-     (columns are found by matching words in the question headers)
+4. `config.yaml` already has all the links filled in. You only need to edit it to change file
+   paths, the cleaning rules, the "normal day" window, or the survey column keywords
+   (columns are found by matching words in the question headers).
 
 5. Run:
 
