@@ -24,7 +24,6 @@ pollutants: [PM2.5, PM10, NO, NO2, NOx, NH3, CO, SO2, O3, Benzene, Toluene, Xyle
 # ---------------------------------------------------------------------
 cleaning:
   error_codes: [999.99, 499.99]   # sensor error codes -> missing
-  co_zero_is_missing: true        # CO == 0 -> missing
   flatline_hours: 6               # same value for this many hours or more -> missing
   max_interpolate_gap_hours: 3    # gaps this short (or shorter) are filled linearly
 
