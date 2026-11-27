@@ -1,62 +1,74 @@
 import pandas as pd
 
 
-def make_hourly_grid(df):
-    df = df.drop_duplicates(["StationId", "Datetime"])
-    pieces = []
-    for station, group in df.groupby("StationId"):
-        hours = pd.date_range(group["Datetime"].min(), group["Datetime"].max(), freq="h")
-        group = group.set_index("Datetime").reindex(hours)
-        group["StationId"] = station
-        pieces.append(group.rename_axis("Datetime").reset_index())
-    return pd.concat(pieces, ignore_index=True)
+def fill_missing_hours(df):
+    # make sure every station has a row for every hour
+    # (otherwise "6 hours in a row" and "3 hour gap" don't really mean anything)
+    df = df.drop_duplicates(subset=["StationId", "Datetime"])
+    out = []
+    for station, g in df.groupby("StationId"):
+        all_hours = pd.date_range(g["Datetime"].min(), g["Datetime"].max(), freq="h")
+        g = g.set_index("Datetime").reindex(all_hours)
+        g["StationId"] = station
+        g.index.name = "Datetime"
+        out.append(g.reset_index())
+    return pd.concat(out, ignore_index=True)
 
 
-def flatline(series, hours):
-    run = (series != series.shift()).cumsum()
-    run_length = series.groupby(run).transform("size")
-    return series.notna() & (run_length >= hours)
+def find_stuck_values(s, hours):
+    # each time the value changes we start a new "run"
+    run_id = (s != s.shift()).cumsum()
+    run_len = s.groupby(run_id).transform("size")
+    return s.notna() & (run_len >= hours)
 
 
-def fill_short_gaps(series, max_gap):
-    missing = series.isna()
-    gap = (missing != missing.shift()).cumsum()
-    gap_length = missing.groupby(gap).transform("sum")
-    filled = series.interpolate(limit_area="inside")
-    return series.where(~(missing & (gap_length <= max_gap)), filled)
+def interpolate_short_gaps(s, max_gap):
+    is_nan = s.isna()
+    gap_id = (is_nan != is_nan.shift()).cumsum()
+    gap_len = is_nan.groupby(gap_id).transform("sum")
+
+    interpolated = s.interpolate(limit_area="inside")
+    short_gap = is_nan & (gap_len <= max_gap)
+    s = s.copy()
+    s[short_gap] = interpolated[short_gap]
+    return s
 
 
 def clean_hourly(df, cfg):
     rules = cfg["cleaning"]
-    cols = [p for p in cfg["pollutants"] if p in df.columns]
-    summary = []
+    cols = [c for c in cfg["pollutants"] if c in df.columns]
+    log = []
 
-    def record(rule, changed):
-        summary.append([rule, int(changed.any(axis=1).sum()), int(changed.sum().sum())])
+    n_before = len(df)
+    df = fill_missing_hours(df)
+    log.append(["Missing hours added as empty rows", len(df) - n_before, 0])
 
-    rows_before = len(df)
-    df = make_hourly_grid(df)
-    summary.append(["Missing hours added as empty rows", len(df) - rows_before, 0])
+    # 1) error codes
+    bad = df[cols].isin(rules["error_codes"])
+    df[cols] = df[cols].mask(bad)
+    log.append(["Error codes set to missing", bad.any(axis=1).sum(), bad.sum().sum()])
 
-    changed = df[cols].isin(rules["error_codes"])
-    df[cols] = df[cols].mask(changed)
-    record("Error codes set to missing", changed)
+    # 2) CO = 0 is not a real reading
+    co_zero = df["CO"] == 0
+    df.loc[co_zero, "CO"] = None
+    log.append(["CO == 0 set to missing", co_zero.sum(), co_zero.sum()])
 
-    changed = pd.DataFrame(False, index=df.index, columns=cols)
-    changed["CO"] = df["CO"] == 0
-    df[cols] = df[cols].mask(changed)
-    record("CO == 0 set to missing", changed)
-
+    # 3) sensor stuck on the same value
     hours = rules["flatline_hours"]
-    changed = pd.DataFrame({c: df.groupby("StationId")[c].transform(lambda s: flatline(s, hours))
-                            for c in cols}).astype(bool)
-    df[cols] = df[cols].mask(changed)
-    record(f"Unchanged for {hours}+ hours set to missing", changed)
-
-    gap = rules["max_interpolate_gap_hours"]
-    before = df[cols].isna()
+    stuck = pd.DataFrame(index=df.index)
     for c in cols:
-        df[c] = df.groupby("StationId")[c].transform(lambda s: fill_short_gaps(s, gap))
-    record(f"Gaps of {gap} hours or less interpolated", before & df[cols].notna())
+        stuck[c] = df.groupby("StationId")[c].transform(lambda s: find_stuck_values(s, hours))
+    stuck = stuck.astype(bool)
+    df[cols] = df[cols].mask(stuck)
+    log.append([f"Unchanged for {hours}+ hours set to missing", stuck.any(axis=1).sum(), stuck.sum().sum()])
 
-    return df, pd.DataFrame(summary, columns=["rule", "rows", "values"])
+    # 4) fill small gaps
+    max_gap = rules["max_interpolate_gap_hours"]
+    was_nan = df[cols].isna()
+    for c in cols:
+        df[c] = df.groupby("StationId")[c].transform(lambda s: interpolate_short_gaps(s, max_gap))
+    filled = was_nan & df[cols].notna()
+    log.append([f"Gaps of {max_gap} hours or less interpolated", filled.any(axis=1).sum(), filled.sum().sum()])
+
+    summary = pd.DataFrame(log, columns=["rule", "rows", "values"])
+    return df, summary

@@ -1,51 +1,81 @@
 import re
 
+import pandas as pd
 
-def find_column(columns, phrases):
+
+def find_column(columns, phrases, skip=()):
+    # a column matches if its header has all the words of one of the phrases
     for phrase in phrases:
+        words = phrase.lower().split()
         for col in columns:
-            if all(word in col.lower() for word in phrase.lower().split()):
+            if col in skip:
+                continue
+            if all(w in col.lower() for w in words):
                 return col
     return None
 
 
-def short_label(header):
-    match = re.search(r"\[(.+?)\]\s*$", header)
-    return match.group(1) if match else header
+def find_rating_columns(survey, high_levels, skip):
+    rating_cols = []
+    for col in survey.columns:
+        if col in skip:
+            continue
+        answers = survey[col].dropna().astype(str).str.strip()
+        if answers.nunique() <= 7 and answers.isin(high_levels).any():
+            rating_cols.append(col)
+    return rating_cols
 
 
-def count_answers(series, multi_select=False):
-    answers = series.dropna().astype(str)
-    if multi_select:
+def short_name(header):
+    # google forms grid questions look like "How much ... ? [Traffic]"
+    m = re.search(r"\[(.+?)\]\s*$", header)
+    if m:
+        return m.group(1)
+    return header
+
+
+def count_answers(col, multi=False):
+    answers = col.dropna().astype(str)
+    if multi:
         answers = answers.str.split(", ").explode()
-    return answers.str.strip().value_counts()
+    answers = answers.str.strip()
+    return answers.value_counts()
 
 
 def survey_results(survey, cfg):
-    scfg = cfg["survey"]
-    high = scfg["rating_high_levels"]
-    columns = list(survey.columns)
+    keywords = cfg["survey"]["column_keywords"]
+    high = cfg["survey"]["rating_high_levels"]
+    top_n = cfg["survey"]["max_categories_shown"]
+    cols = list(survey.columns)
 
-    harder = find_column(columns, scfg["column_keywords"]["evening_harder"])
-    worst = find_column([c for c in columns if c != harder], scfg["column_keywords"]["worst_time"])
-    fix = find_column([c for c in columns if c not in (harder, worst)], scfg["column_keywords"]["one_fix"])
-    ratings = [c for c in columns
-               if c not in (harder, worst, fix)
-               and survey[c].nunique() <= 7
-               and survey[c].astype(str).str.strip().isin(high).any()]
-    print(f"Survey columns: harder={harder!r}, worst={worst!r}, fix={fix!r}, ratings={len(ratings)}")
+    harder_col = find_column(cols, keywords["evening_harder"])
+    worst_col = find_column(cols, keywords["worst_time"], skip=[harder_col])
+    fix_col = find_column(cols, keywords["one_fix"], skip=[harder_col, worst_col])
+    rating_cols = find_rating_columns(survey, high, skip=[harder_col, worst_col, fix_col])
+
+    print("Evenings harder column:", harder_col)
+    print("Worst time column:", worst_col)
+    print("One fix column:", fix_col)
+    print("Rating columns found:", len(rating_cols))
 
     results = {}
-    if harder:
-        results["harder"] = (harder, count_answers(survey[harder], multi_select=True))
-    if worst:
-        results["worst_time"] = (worst, count_answers(survey[worst]))
-    if ratings:
-        counts = survey[ratings].apply(lambda s: s.astype(str).str.strip().isin(high).sum())
-        counts.index = [short_label(c) for c in ratings]
-        results["ratings"] = ("Rated 'A lot' or 'Severely'", counts.sort_values(ascending=False))
-    if fix:
-        results["one_fix"] = (fix, count_answers(survey[fix]))
 
-    top_n = scfg["max_categories_shown"]
-    return {k: (q, c.head(top_n)) for k, (q, c) in results.items()}, len(survey)
+    if harder_col:
+        results["harder"] = (harder_col, count_answers(survey[harder_col], multi=True).head(top_n))
+
+    if worst_col:
+        results["worst_time"] = (worst_col, count_answers(survey[worst_col]).head(top_n))
+
+    if rating_cols:
+        counts = {}
+        for c in rating_cols:
+            answers = survey[c].astype(str).str.strip()
+            counts[short_name(c)] = answers.isin(high).sum()
+        counts = pd.Series(counts).sort_values(ascending=False)
+        results["ratings"] = ("Rated 'A lot' or 'Severely'", counts.head(top_n))
+
+    if fix_col:
+        results["one_fix"] = (fix_col, count_answers(survey[fix_col]).head(top_n))
+
+    return results, len(survey)
+

@@ -6,49 +6,58 @@ import yaml
 
 
 def load_config(path="config.yaml"):
-    with open(path, encoding="utf-8") as f:
-        return yaml.safe_load(f)
-
-
-def check_file(path):
-    if not os.path.exists(path):
-        sys.exit(f"ERROR: file not found: {path} (check config.yaml)")
+    with open(path) as f:
+        cfg = yaml.safe_load(f)
+    return cfg
 
 
 def load_bengaluru_hourly(cfg):
-    check_file(cfg["data"]["stations_csv"])
-    check_file(cfg["data"]["station_hour_csv"])
+    stations_file = cfg["data"]["stations_csv"]
+    hourly_file = cfg["data"]["station_hour_csv"]
 
-    stations = pd.read_csv(cfg["data"]["stations_csv"])
+    for f in [stations_file, hourly_file]:
+        if not os.path.exists(f):
+            sys.exit("Can't find " + f + " - download it from Kaggle and check config.yaml")
+
+    stations = pd.read_csv(stations_file)
     stations = stations[stations["City"] == cfg["city"]]
-    ids = set(stations["StationId"])
+    station_ids = stations["StationId"].tolist()
 
-    columns = ["StationId", "Datetime"] + cfg["pollutants"]
-    pieces = []
-    for chunk in pd.read_csv(cfg["data"]["station_hour_csv"], chunksize=500_000):
-        chunk = chunk[chunk["StationId"].isin(ids)]
-        pieces.append(chunk[[c for c in columns if c in chunk.columns]])
-    hourly = pd.concat(pieces, ignore_index=True)
+    # station_hour.csv is huge so read it in chunks and only keep bengaluru rows
+    keep_cols = ["StationId", "Datetime"] + cfg["pollutants"]
+    parts = []
+    for chunk in pd.read_csv(hourly_file, chunksize=500000):
+        chunk = chunk[chunk["StationId"].isin(station_ids)]
+        cols = [c for c in keep_cols if c in chunk.columns]
+        parts.append(chunk[cols])
+
+    hourly = pd.concat(parts, ignore_index=True)
     hourly["Datetime"] = pd.to_datetime(hourly["Datetime"])
 
-    print(f"{len(stations)} stations, {len(hourly):,} hourly rows")
+    print("Stations:", len(stations))
+    print("Hourly rows:", len(hourly))
     return hourly, stations
 
 
 def load_calendar(cfg):
-    check_file(cfg["data"]["festival_calendar_csv"])
-    calendar = pd.read_csv(cfg["data"]["festival_calendar_csv"])
-    calendar["date"] = pd.to_datetime(calendar["date"])
-    return calendar
+    cal = pd.read_csv(cfg["data"]["festival_calendar_csv"])
+    cal["date"] = pd.to_datetime(cal["date"])
+    return cal
 
 
 def load_survey(cfg):
-    source = str(cfg["survey"]["survey_responses_csv"])
-    if not source.startswith("http") and not os.path.exists(source):
-        print(f"No survey file at {source}, skipping survey charts")
+    path = cfg["survey"]["survey_responses_csv"]
+
+    if not path.startswith("http") and not os.path.exists(path):
+        print("Survey file not found, skipping survey charts")
         return None
+
     try:
-        return pd.read_csv(source)
-    except Exception as error:
-        print(f"Could not read survey ({error}), skipping survey charts")
+        survey = pd.read_csv(path)
+    except Exception as e:
+        print("Couldn't load the survey sheet:", e)
+        print("Skipping survey charts")
         return None
+
+    print("Survey responses:", len(survey))
+    return survey

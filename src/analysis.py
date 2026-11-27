@@ -1,77 +1,124 @@
 import pandas as pd
 
 
-def add_time_columns(df, calendar, cfg):
-    rules = cfg["normal_day"]
-    not_normal = set()
-    for date, festival in zip(calendar["date"], calendar["festival"]):
-        if festival in rules["festivals_with_window"]:
-            not_normal.update(pd.date_range(date - pd.Timedelta(days=rules["days_before"]),
-                                            date + pd.Timedelta(days=rules["days_after"])))
-        else:
-            not_normal.add(date)
+def get_non_normal_dates(calendar, cfg):
+    before = cfg["normal_day"]["days_before"]
+    after = cfg["normal_day"]["days_after"]
+    big_festivals = cfg["normal_day"]["festivals_with_window"]
 
+    dates = set()
+    for _, row in calendar.iterrows():
+        if row["festival"] in big_festivals:
+            start = row["date"] - pd.Timedelta(days=before)
+            end = row["date"] + pd.Timedelta(days=after)
+            for d in pd.date_range(start, end):
+                dates.add(d)
+        else:
+            # holidays and lockdown days - just that one day
+            dates.add(row["date"])
+    return dates
+
+
+def add_time_columns(df, calendar, cfg):
     df = df.copy()
     df["date"] = df["Datetime"].dt.normalize()
     df["hour"] = df["Datetime"].dt.hour
-    df["weekday"] = df["Datetime"].dt.dayofweek
-    df["is_normal_day"] = ~df["date"].isin(not_normal)
+    df["weekday"] = df["Datetime"].dt.dayofweek  # monday = 0
+
+    bad_dates = get_non_normal_dates(calendar, cfg)
+    df["is_normal_day"] = ~df["date"].isin(bad_dates)
     return df
 
 
 def no2_by_time_of_day(df):
-    d = df[df["is_normal_day"] & (df["weekday"] < 5)]
+    wd = df[(df["is_normal_day"]) & (df["weekday"] < 5)]
+
+    night = wd[wd["hour"] <= 5]["NO2"].mean()
+    morning = wd[wd["hour"] == 8]["NO2"].mean()
+    afternoon = wd[(wd["hour"] >= 12) & (wd["hour"] <= 15)]["NO2"].mean()
+    evening = wd[wd["hour"] == 20]["NO2"].mean()
+
     return pd.Series({
-        "Night (12-6 AM)": d.loc[d["hour"].between(0, 5), "NO2"].mean(),
-        "8 AM": d.loc[d["hour"] == 8, "NO2"].mean(),
-        "Afternoon (12-4 PM)": d.loc[d["hour"].between(12, 15), "NO2"].mean(),
-        "8 PM": d.loc[d["hour"] == 20, "NO2"].mean(),
+        "Night (12-6 AM)": night,
+        "8 AM": morning,
+        "Afternoon (12-4 PM)": afternoon,
+        "8 PM": evening,
     })
 
 
 def no2_8pm_by_station(df, stations, start_date):
-    d = df[(df["Datetime"] >= start_date) & (df["hour"] == 20)]
-    result = d.groupby("StationId")["NO2"].mean().dropna()
-    names = stations.set_index("StationId")["StationName"].str.split(",").str[0]
-    result.index = result.index.map(names)
-    return result.sort_values(ascending=False)
+    sub = df[(df["Datetime"] >= start_date) & (df["hour"] == 20)]
+    avg = sub.groupby("StationId")["NO2"].mean().dropna()
+
+    # station names are long like "BTM Layout, Bengaluru - CPCB", just keep the first bit
+    names = {}
+    for _, row in stations.iterrows():
+        names[row["StationId"]] = row["StationName"].split(",")[0]
+    avg.index = [names.get(i, i) for i in avg.index]
+
+    return avg.sort_values(ascending=False)
 
 
 def daily_no2(df, min_hours):
     daily = df.groupby(["StationId", "date"]).agg(
-        no2=("NO2", "mean"), hours=("NO2", "count"), is_normal_day=("is_normal_day", "first")
+        no2=("NO2", "mean"),
+        hours=("NO2", "count"),
+        is_normal_day=("is_normal_day", "first"),
     ).reset_index()
-    daily = daily[daily["hours"] >= min_hours]
+
+    # don't trust days with lots of missing hours
+    daily = daily[daily["hours"] >= min_hours].copy()
     daily["weekday"] = daily["date"].dt.dayofweek
     return daily
 
 
 def festival_change(daily, calendar, period, window_days):
-    changes = []
-    for fest in calendar.loc[calendar["festival"] == period["festival"], "date"]:
-        window = pd.Timedelta(days=window_days)
-        pool = daily[daily["is_normal_day"] & daily["date"].between(fest - window, fest + window)]
-        baseline = pool.groupby(["StationId", "weekday"])["no2"].median()
+    fest_dates = calendar[calendar["festival"] == period["festival"]]["date"]
+    all_changes = []
 
-        days = [fest + pd.Timedelta(days=k) for k in range(period["start_offset"], period["end_offset"] + 1)]
-        festival_days = daily[daily["date"].isin(days)]
-        festival_days = festival_days.join(baseline.rename("baseline"), on=["StationId", "weekday"])
-        changes += list((festival_days["no2"] / festival_days["baseline"] - 1).dropna() * 100)
+    for fest in fest_dates:
+        # baseline = normal days within +/- window_days, median per station and weekday
+        lo = fest - pd.Timedelta(days=window_days)
+        hi = fest + pd.Timedelta(days=window_days)
+        normal = daily[(daily["is_normal_day"]) & (daily["date"] >= lo) & (daily["date"] <= hi)]
+        baseline = normal.groupby(["StationId", "weekday"])["no2"].median().rename("baseline")
 
-    if not changes:
+        days = []
+        for k in range(period["start_offset"], period["end_offset"] + 1):
+            days.append(fest + pd.Timedelta(days=k))
+
+        fest_days = daily[daily["date"].isin(days)]
+        fest_days = fest_days.join(baseline, on=["StationId", "weekday"])
+        pct = (fest_days["no2"] / fest_days["baseline"] - 1) * 100
+        all_changes.extend(pct.dropna().tolist())
+
+    if len(all_changes) == 0:
         return float("nan"), 0
-    return sum(changes) / len(changes), len(changes)
+    return sum(all_changes) / len(all_changes), len(all_changes)
 
 
 def diwali_night_pm25(df, calendar, early_hours, late_hours):
-    rows = []
+    diwali_dates = calendar[calendar["festival"] == "Diwali"]["date"]
     bali = calendar[calendar["festival"] == "Balipadyami"]
-    for diwali in calendar.loc[calendar["festival"] == "Diwali", "date"]:
-        nights = [diwali - pd.Timedelta(days=1), diwali] + list(bali.loc[bali["date"].dt.year == diwali.year, "date"])
-        d = df[df["date"].isin(nights)]
-        early = d.loc[d["hour"].isin(early_hours), "PM2.5"].mean()
-        late = d.loc[d["hour"].isin(late_hours), "PM2.5"].mean()
-        if early > 0 and pd.notna(late):
-            rows.append({"year": diwali.year, "early": early, "late": late,
-                         "pct_increase": (late / early - 1) * 100})
-    return pd.DataFrame(rows)
+
+    results = []
+    for diwali in diwali_dates:
+        eve = diwali - pd.Timedelta(days=1)
+        bali_day = bali[bali["date"].dt.year == diwali.year]["date"].tolist()
+        nights = [eve, diwali] + bali_day
+
+        sub = df[df["date"].isin(nights)]
+        early = sub[sub["hour"].isin(early_hours)]["PM2.5"].mean()
+        late = sub[sub["hour"].isin(late_hours)]["PM2.5"].mean()
+
+        if pd.isna(early) or pd.isna(late) or early == 0:
+            continue  # no data that year
+
+        results.append({
+            "year": diwali.year,
+            "early": early,
+            "late": late,
+            "pct_increase": (late - early) / early * 100,
+        })
+
+    return pd.DataFrame(results)
