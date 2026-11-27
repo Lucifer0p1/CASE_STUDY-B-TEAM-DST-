@@ -107,6 +107,6 @@ COVID lockdown (2020-03-25 to 2020-05-31).
 
 ## Use of AI
 
-We used an AI coding assistant (Claude) to help write and tidy up the Python code in this project.
+We used an AI coding assistant to help write and tidy up the Python code in this project.
 The analysis questions, the festival calendar, the survey and the interpretation of the results are our own,
 and we checked the code and its outputs ourselves.
